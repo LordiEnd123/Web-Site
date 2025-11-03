@@ -1,0 +1,24 @@
+@media (max-width: 900px) {
+  #hero {
+    flex-direction: column;
+    text-align: center;
+  }
+  .search { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  .hero-text h2 {
+    font-size: 1.5rem;
+  }
+  #categories h2,
+  #products h2 {
+    font-size: 1.4rem;
+  }
+  .product-card {
+    padding: 15px;
+  }
+}

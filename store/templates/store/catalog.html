@@ -1,0 +1,32 @@
+{% extends "store/base.html" %}
+{% load static %}
+
+{% block title %}Каталог — Digital Nexus{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'store/css/pages/catalog.css' %}">
+{% endblock %}
+
+{% block content %}
+<section id="catalog">
+  <h2>Каталог товаров</h2>
+
+  <div class="product-grid">
+    {% for product in products %}
+      <div class="product-card">
+        {% if product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        {% else %}
+          <img src="{% static 'store/images/no-image.png' %}" alt="Нет изображения">
+        {% endif %}
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.description|truncatechars:100 }}</p>
+        <p class="price">{{ product.price }} ₽</p>
+        <button class="hero-btn">В корзину</button>
+      </div>
+    {% empty %}
+      <p>Пока нет товаров </p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

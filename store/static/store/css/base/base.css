@@ -1,0 +1,28 @@
+/* ОБЩИЕ СТИЛИ */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #001418;
+  color: #fff;
+  overflow-x: hidden;
+  padding-top: 72px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ОСНОВНОЙ КОНТЕЙНЕР */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}

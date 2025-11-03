@@ -1,0 +1,64 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>{% block title %}Digital Nexus{% endblock %}</title>
+
+  <!-- Общие стили -->
+  <link rel="stylesheet" href="{% static 'store/css/base/base.css' %}">
+  <link rel="stylesheet" href="{% static 'store/css/base/header.css' %}">
+  <link rel="stylesheet" href="{% static 'store/css/base/footer.css' %}">
+  <link rel="stylesheet" href="{% static 'store/css/base/responsive.css' %}">
+
+  <!-- Дополнительные стили для конкретной страницы -->
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- ШАПКА -->
+  <header>
+    <div class="header">
+      <div class="logo">
+        <img src="{% static 'store/images/logo.png' %}" alt="Digital Nexus Logo" class="site-logo">
+      </div>
+
+      <nav>
+        <a href="{% url 'index' %}">Главная</a>
+        <a href="{% url 'catalog' %}">Каталог</a>
+      </nav>
+
+      <div class="header-right">
+        <div class="search">
+          <span class="icon">🔍</span>
+          <input type="search" placeholder="Поиск по товарам...">
+        </div>
+
+        <div class="user-actions">
+          <div class="icon-btn" title="Профиль">👤</div>
+          <div class="icon-btn" title="Корзина">🛒</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ОСНОВНОЙ КОНТЕНТ -->
+  <main>
+    {% block content %}
+    {% endblock %}
+  </main>
+
+  <!-- ПОДВАЛ -->
+  <footer>
+    <div class="footer-content">
+      <p>© 2025 Digital Nexus. Все права защищены.</p>
+      <p><a href="#">Пользовательское соглашение</a> | <a href="#">Политика конфиденциальности</a></p>
+    </div>
+  </footer>
+
+  <!-- Скрипты -->
+  <script src="{% static 'store/js/main.js' %}"></script>
+</body>
+</html>
