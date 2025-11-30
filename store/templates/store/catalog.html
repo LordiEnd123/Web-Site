@@ -9,23 +9,69 @@
 
 {% block content %}
 <section id="catalog">
+
   <h2>Каталог товаров</h2>
+
+  <!-- =================== ФИЛЬТРЫ =================== -->
+  <form method="get" class="filters">
+
+    <div class="filter-block">
+      <label>Категория:</label>
+      <select name="category">
+        <option value="">Все</option>
+        {% for cat in categories %}
+          <option value="{{ cat.slug }}"
+            {% if request.GET.category == cat.slug %}selected{% endif %}>
+            {{ cat.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-block">
+      <label>Цена от:</label>
+      <input type="number" name="min_price" value="{{ request.GET.min_price }}">
+    </div>
+
+    <div class="filter-block">
+      <label>Цена до:</label>
+      <input type="number" name="max_price" value="{{ request.GET.max_price }}">
+    </div>
+
+    <div class="filter-block">
+      <label>Сортировка:</label>
+      <select name="sort">
+        <option value="">Без сортировки</option>
+        <option value="new" {% if request.GET.sort == 'new' %}selected{% endif %}>Новинки</option>
+        <option value="price_asc" {% if request.GET.sort == 'price_asc' %}selected{% endif %}>Цена ↑</option>
+        <option value="price_desc" {% if request.GET.sort == 'price_desc' %}selected{% endif %}>Цена ↓</option>
+      </select>
+    </div>
+
+    <button type="submit" class="filter-btn">Применить</button>
+  </form>
+
+  <!-- =================== СЕТКА ТОВАРОВ =================== -->
 
   <div class="product-grid">
     {% for product in products %}
-      <div class="product-card">
-        {% if product.image %}
-          <img src="{{ product.image.url }}" alt="{{ product.name }}">
-        {% else %}
-          <img src="{% static 'store/images/no-image.png' %}" alt="Нет изображения">
-        {% endif %}
-        <h3>{{ product.name }}</h3>
-        <p>{{ product.description|truncatechars:100 }}</p>
-        <p class="price">{{ product.price }} ₽</p>
-        <button class="hero-btn">В корзину</button>
-      </div>
+      <a href="{% url 'product_detail' product.slug %}" class="product-card-link">
+        <div class="product-card">
+          
+          {% if product.image %}
+              <img src="{{ product.image.url }}" alt="{{ product.name }}">
+          {% else %}
+              <img src="{% static 'store/images/no-image.png' %}" alt="No image">
+          {% endif %}
+
+          <h3>{{ product.name }}</h3>
+          <p>{{ product.description|truncatechars:100 }}</p>
+          <p class="price">{{ product.price }} ₽</p>
+
+        </div>
+      </a>
     {% empty %}
-      <p>Пока нет товаров </p>
+      <p>Пока нет товаров</p>
     {% endfor %}
   </div>
 </section>

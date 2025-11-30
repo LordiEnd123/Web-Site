@@ -37,8 +37,35 @@
         </div>
 
         <div class="user-actions">
-          <div class="icon-btn" title="Профиль">👤</div>
-          <div class="icon-btn" title="Корзина">🛒</div>
+
+          <!-- 👤 Выпадающее меню профиля -->
+          <div class="profile-menu">
+            <button class="icon-btn glow profile-btn" id="profile-btn" title="Профиль">
+              {% if user.is_authenticated and user.avatar %}
+                <img id="header-avatar-img"
+                    src="{{ user.avatar.url }}"
+                    alt="Аватар"
+                    class="nav-avatar">
+              {% else %}
+                <span id="header-avatar-placeholder">👤</span>
+              {% endif %}
+            </button>
+
+
+            <div class="dropdown" id="profile-dropdown">
+              {% if user.is_authenticated %}
+                <a href="{% url 'profile' %}">Профиль</a>
+                <a href="{% url 'logout' %}">Выйти</a>
+              {% else %}
+                <a href="{% url 'login' %}">Вход</a>
+                <a href="{% url 'register' %}">Регистрация</a>
+              {% endif %}
+            </div>
+          </div>
+
+
+          <!-- 🛒 Корзина -->
+          <a href="{% url 'cart' %}" class="icon-btn glow" title="Корзина">🛒</a>
         </div>
       </div>
     </div>
@@ -60,5 +87,6 @@
 
   <!-- Скрипты -->
   <script src="{% static 'store/js/main.js' %}"></script>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

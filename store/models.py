@@ -1,8 +1,27 @@
 from django.db import models
 from django.utils.text import slugify
+from django.contrib.auth.models import AbstractUser
+
+# ---------- ГОРОДА ----------
+class City(models.Model):
+    name = models.CharField("Город", max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+
+    class Meta:
+        verbose_name = "Город"
+        verbose_name_plural = "Города"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
 
-# Категории товаров
+# ---------- КАТЕГОРИИ ----------
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="Название категории")
     slug = models.SlugField(max_length=120, unique=True, blank=True)
@@ -21,7 +40,7 @@ class Category(models.Model):
         super().save(*args, **kwargs)
 
 
-# Товары
+# ---------- ТОВАРЫ ----------
 class Product(models.Model):
     id = models.AutoField(primary_key=True)
     product_code = models.CharField(max_length=50, unique=True, verbose_name="Код товара (SKU)")
@@ -50,8 +69,14 @@ class Product(models.Model):
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
+    def available_keys_count(self):
+        return self.keys.filter(is_active=True).count()
 
-# Ключи, Аккаунты, Коды
+    def get_free_key(self):
+        return self.keys.filter(is_active=False).first()
+
+
+# ---------- КЛЮЧИ / АККАУНТЫ ----------
 class ProductKey(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="keys", verbose_name="Товар")
     key_value = models.CharField(max_length=255, unique=True, verbose_name="Ключ / данные аккаунта")
@@ -70,3 +95,32 @@ class ProductKey(models.Model):
     def deactivate(self):
         self.is_active = False
         self.save()
+
+
+# ---------- ПОЛЬЗОВАТЕЛЬ ----------
+class CustomUser(AbstractUser):
+    email = models.EmailField(unique=True)
+
+    phone = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,              # ← чтобы можно было хранить NULL
+        verbose_name="Телефон"
+    )
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,              # ← тоже допускаем NULL
+        verbose_name="Город"
+    )
+    avatar = models.ImageField(
+        upload_to="avatars/",
+        blank=True,
+        null=True,
+        verbose_name="Аватар"
+    )
+
+    def __str__(self):
+        return self.username
+
+
