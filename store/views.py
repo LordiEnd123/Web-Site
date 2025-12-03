@@ -1,34 +1,28 @@
 from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
 from django.urls import reverse
 from .models import Product, Category, CustomUser
 from .forms import RegisterForm, LoginForm
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .forms import ProfileForm, PasswordChangeCustomForm
-from .forms import ProfileForm
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.contrib.auth import update_session_auth_hash
-
-from .forms import ProfileForm, PasswordChangeCustomForm
+from .forms import ProfileForm, PasswordChangeCustomForm, EmailChangeForm
 
 # === Главная страница ===
 def home(request):
-    products = Product.objects.filter(is_available=True)[:6]  # популярные товары
     categories = Category.objects.all()
-    return render(request, 'store/index.html', {
-        'products': products,
-        'categories': categories
+    products = Product.objects.filter(is_available=True)[:6]  # популярные товары
+
+    return render(request, "store/index.html", {
+        "categories": categories,
+        "products": products,
     })
+
 
 
 # === Каталог ===
@@ -132,21 +126,22 @@ def profile_view(request):
     user = request.user
 
     if request.method == "POST":
-        # имена полей такие же, как в шаблоне profile.html
-        user.username = request.POST.get("username", user.username)
-        user.email = request.POST.get("email", user.email)
-        user.phone = request.POST.get("phone", user.phone)
-        user.city = request.POST.get("city", user.city)
+        # без request.FILES — кнопка не зависит от аватара
+        form = ProfileForm(request.POST, instance=user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Профиль обновлён ✅")
+            return redirect("profile")
+        else:
+            # Можно для отладки временно вывести ошибки в консоль
+            print(form.errors)
+    else:
+        form = ProfileForm(instance=user)
 
-        avatar = request.FILES.get("avatar")
-        if avatar:
-            user.avatar = avatar
-
-        user.save()
-        messages.success(request, "Профиль обновлён ✅")
-        return redirect("profile")
-
-    return render(request, "store/profile.html", {"user": user})
+    return render(request, "store/profile.html", {
+        "form": form,
+        "user": user,
+    })
 
 from django.shortcuts import get_object_or_404
 
@@ -279,3 +274,167 @@ def checkout(request):
     return render(request, "store/checkout_success.html", {
         "bought_keys": bought_keys,
     })
+
+
+from .models import Order, OrderItem
+
+@login_required
+def checkout_start(request):
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.error(request, "Корзина пуста.")
+        return redirect("cart")
+
+    total_price = 0
+    # сначала проверяем наличие ключей и считаем сумму
+    for product_id, qty in cart.items():
+        product = get_object_or_404(Product, id=product_id)
+
+        if qty > product.available_keys_count():
+            messages.error(
+                request,
+                f"Недостаточно ключей для товара «{product.name}»."
+            )
+            return redirect("cart")
+
+        total_price += product.price * qty
+
+    # создаём заказ
+    order = Order.objects.create(
+        user=request.user,
+        total_price=total_price,
+        status=Order.STATUS_NEW,
+        provider="demo",
+    )
+
+    # создаём позиции заказа
+    for product_id, qty in cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            quantity=qty,
+            price=product.price,
+        )
+
+    # ВАЖНО: корзину здесь НЕ очищаем!
+    return redirect("pay_order", order_id=order.id)
+
+
+@login_required
+def pay_order(request, order_id):
+    # ищем НЕоплаченный заказ текущего пользователя
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+        status=Order.STATUS_NEW,
+    )
+
+    bought_keys = []
+
+    # идём по позициям заказа, а НЕ по корзине
+    for item in order.items.select_related("product"):
+        product = item.product
+
+        for _ in range(item.quantity):
+            key = product.get_free_key()
+            if not key:
+                messages.error(
+                    request,
+                    f"Не хватает ключей для товара «{product.name}». "
+                    f"Напишите в поддержку."
+                )
+                return redirect("cart")
+
+            # корректно помечаем как проданный
+            key.is_active = False
+            key.is_sold = True
+            key.save()
+
+            bought_keys.append((product, key.key_value))
+
+    # помечаем заказ оплаченным
+    order.status = Order.STATUS_PAID
+    order.save()
+
+    # очищаем корзину только теперь
+    request.session["cart"] = {}
+
+    return render(request, "store/checkout_success.html", {
+        "bought_keys": bought_keys,
+        "order": order,
+    })
+
+@login_required
+def email_change_view(request):
+    user = request.user
+
+    if request.method == "POST":
+        form = EmailChangeForm(user, request.POST)
+        if form.is_valid():
+            new_email = form.cleaned_data["email"]
+
+            # сохраняем новую почту как "ожидающую подтверждения"
+            user.pending_email = new_email
+            user.email_verified = False
+            user.save()
+
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+
+            confirm_url = request.build_absolute_uri(
+                reverse("email_change_confirm", kwargs={"uidb64": uid, "token": token})
+            )
+
+            subject = "Подтверждение смены почты на Digital Nexus"
+            message = render_to_string(
+                "store/email_change_email.html",
+                {
+                    "user": user,
+                    "new_email": new_email,
+                    "confirm_url": confirm_url,
+                },
+            )
+
+            EmailMessage(subject, message, to=[new_email]).send(fail_silently=True)
+
+            messages.info(
+                request,
+                "Мы отправили письмо с подтверждением на новую почту. "
+                "Перейдите по ссылке из письма, чтобы завершить смену."
+            )
+            return redirect("profile")
+    else:
+        form = EmailChangeForm(user, initial={"email": user.email})
+
+    return render(request, "store/email_change.html", {"form": form})
+
+
+def email_change_confirm(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = CustomUser.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+        user = None
+
+    if (
+        user is not None
+        and default_token_generator.check_token(user, token)
+        and user.pending_email
+    ):
+        new_email = user.pending_email
+
+        user.email = new_email
+        user.pending_email = ""
+        user.email_verified = True
+        user.save()
+
+        messages.success(request, "Почта успешно изменена и подтверждена ✅")
+        return redirect("profile")
+    else:
+        messages.error(
+            request,
+            "Ссылка для смены почты недействительна или устарела."
+        )
+        return redirect("profile")

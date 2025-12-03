@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 
 # ---------- ГОРОДА ----------
 class City(models.Model):
@@ -70,27 +71,29 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     def available_keys_count(self):
-        return self.keys.filter(is_active=True).count()
+        # Кол-во НЕпроданных ключей
+        return self.keys.filter(is_sold=False).count()
 
     def get_free_key(self):
-        return self.keys.filter(is_active=False).first()
+        # Берём первый свободный ключ
+        return self.keys.filter(is_sold=False).first()
 
 
 # ---------- КЛЮЧИ / АККАУНТЫ ----------
 class ProductKey(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="keys", verbose_name="Товар")
-    key_value = models.CharField(max_length=255, unique=True, verbose_name="Ключ / данные аккаунта")
-    is_active = models.BooleanField(default=True, verbose_name="Активен (не продан)")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата добавления")
-
-    class Meta:
-        verbose_name = "Ключ / Аккаунт"
-        verbose_name_plural = "Ключи / Аккаунты"
-        ordering = ["-created_at"]
+    product = models.ForeignKey(
+        Product,
+        related_name="keys",
+        on_delete=models.CASCADE
+    )
+    key_value = models.CharField("Ключ", max_length=255, unique=True)
+    is_active = models.BooleanField("Активен", default=True)
+    is_sold = models.BooleanField("Продан", default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        status = "yes" if self.is_active else "no"
-        return f"{status} {self.product.name} — {self.key_value[:20]}"
+        return f"{self.product.name} — {self.key_value}"
+
 
     def deactivate(self):
         self.is_active = False
@@ -104,13 +107,13 @@ class CustomUser(AbstractUser):
     phone = models.CharField(
         max_length=20,
         blank=True,
-        null=True,              # ← чтобы можно было хранить NULL
+        null=True,
         verbose_name="Телефон"
     )
     city = models.CharField(
         max_length=100,
         blank=True,
-        null=True,              # ← тоже допускаем NULL
+        null=True,
         verbose_name="Город"
     )
     avatar = models.ImageField(
@@ -120,7 +123,99 @@ class CustomUser(AbstractUser):
         verbose_name="Аватар"
     )
 
+    # --- новые поля ---
+    email_verified = models.BooleanField(
+        default=False,
+        verbose_name="Почта подтверждена"
+    )
+    pending_email = models.EmailField(
+        blank=True,
+        null=True,
+        verbose_name="Новая почта (ожидает подтверждения)"
+    )
+
     def __str__(self):
         return self.username
 
 
+
+class Order(models.Model):
+    STATUS_NEW = "new"
+    STATUS_PAID = "paid"
+    STATUS_CANCELED = "canceled"
+
+    STATUS_CHOICES = (
+        (STATUS_NEW, "Новый"),
+        (STATUS_PAID, "Оплачен"),
+        (STATUS_CANCELED, "Отменён"),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="orders",
+        verbose_name="Пользователь",
+    )
+    total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Сумма заказа",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_NEW,
+        verbose_name="Статус",
+    )
+
+    provider = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Платёжный провайдер",
+    )
+    provider_payment_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="ID платежа у провайдера",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+
+    def __str__(self):
+        return f"Заказ #{self.id} от {self.user}"
+
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.PositiveIntegerField()
+    def subtotal(self):
+        return self.price * self.quantity
+
+
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+
+def recalc_product_counters(product):
+    """
+    Пересчитать склад и проданные для товара по его ключам.
+    """
+    stock = product.keys.filter(is_sold=False).count()
+    sold = product.keys.filter(is_sold=True).count()
+
+    product.stock = stock
+    product.sold_count = sold
+    product.save(update_fields=["stock", "sold_count"])
+
+
+@receiver(post_save, sender=ProductKey)
+def product_key_saved(sender, instance, **kwargs):
+    recalc_product_counters(instance.product)
+
+
+@receiver(post_delete, sender=ProductKey)
+def product_key_deleted(sender, instance, **kwargs):
+    recalc_product_counters(instance.product)

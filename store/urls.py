@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from store.views import email_change_view, email_change_confirm
 
 urlpatterns = [
     path('', views.home, name='index'),
@@ -27,4 +28,11 @@ urlpatterns = [
     path("profile/upload-avatar/", views.upload_avatar, name="upload_avatar"),
 
     path("checkout/", views.checkout, name="checkout"),
+
+    path("checkout/start/", views.checkout_start, name="checkout_start"),
+    path("checkout/pay/<int:order_id>/", views.pay_order, name="pay_order"),
+
+    path("profile/email/", email_change_view, name="email_change"),
+    path("verify-email-change/<uidb64>/<token>/", email_change_confirm, name="email_change_confirm"),
+
 ]
