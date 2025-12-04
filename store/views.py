@@ -16,12 +16,19 @@ from .forms import ProfileForm, PasswordChangeCustomForm, EmailChangeForm
 # === Главная страница ===
 def home(request):
     categories = Category.objects.all()
-    products = Product.objects.filter(is_available=True)[:6]  # популярные товары
+
+    # сортируем по количеству проданных (sold_count) по убыванию
+    products = (
+        Product.objects
+        .filter(is_available=True)
+        .order_by("-sold_count", "-created_at")[:6]   # <= ВАЖНО
+    )
 
     return render(request, "store/index.html", {
         "categories": categories,
         "products": products,
     })
+
 
 
 
@@ -119,29 +126,31 @@ def logout_view(request):
     logout(request)
     return redirect('index')
 
-
+from .models import City
 # === Профиль ===
 @login_required
 def profile_view(request):
     user = request.user
 
     if request.method == "POST":
-        # без request.FILES — кнопка не зависит от аватара
-        form = ProfileForm(request.POST, instance=user)
+        form = ProfileForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             form.save()
-            messages.success(request, "Профиль обновлён ✅")
+            messages.success(request, "Профиль обновлён")
             return redirect("profile")
         else:
-            # Можно для отладки временно вывести ошибки в консоль
-            print(form.errors)
+            messages.error(request, "Проверьте введённые данные")
     else:
         form = ProfileForm(instance=user)
+
+    cities = City.objects.order_by("name").values_list("name", flat=True)
 
     return render(request, "store/profile.html", {
         "form": form,
         "user": user,
+        "cities": cities,
     })
+
 
 from django.shortcuts import get_object_or_404
 

@@ -18,7 +18,21 @@ class City(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            from django.utils.text import slugify
+
+            base_slug = slugify(self.name) or "city"
+            slug = base_slug
+            counter = 1
+
+            # Пока есть такой slug у других городов — добавляем -1, -2, ...
+            from store.models import City  # здесь можно избежать импорта, но так проще
+
+            while City.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            self.slug = slug
+
         super().save(*args, **kwargs)
 
 
